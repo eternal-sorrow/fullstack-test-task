@@ -1,14 +1,18 @@
+import logging
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from kombu.exceptions import OperationalError
 from starlette import status
 
 from src.schemas import AlertItem, FileItem, FileUpdate
 from src.service import STORAGE_DIR, create_file, delete_file, get_file, list_alerts, list_files, update_file
 from src.tasks import scan_file_for_threats
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(
@@ -39,7 +43,13 @@ async def create_file_view(
     file: Annotated[UploadFile, File()],
 ):
     file_item = await create_file(title=title, upload_file=file)
-    scan_file_for_threats.delay(file_item.id)
+    try:
+        scan_file_for_threats.delay(file_item.id)
+    except OperationalError:
+        logger.exception(
+            "Failed to enqueue virus scan for file %s",
+            file_item.id,
+        )
     return file_item
 
 
