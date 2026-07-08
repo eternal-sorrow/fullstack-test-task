@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,20 +44,20 @@ async def create_file_view(
 
 
 @app.get("/files/{file_id}", response_model=FileItem)
-async def get_file_view(file_id: str):
+async def get_file_view(file_id: UUID):
     return await get_file(file_id)
 
 
 @app.patch("/files/{file_id}", response_model=FileItem)
 async def update_file_view(
-    file_id: str,
+    file_id: UUID,
     payload: FileUpdate,
 ):
     return await update_file(file_id=file_id, title=payload.title)
 
 
 @app.get("/files/{file_id}/download")
-async def download_file(file_id: str):
+async def download_file(file_id: UUID):
     file_item = await get_file(file_id)
     stored_path = STORAGE_DIR / file_item.stored_name
     if not stored_path.exists():
@@ -69,6 +70,6 @@ async def download_file(file_id: str):
 
 
 @app.delete("/files/{file_id}", status_code=204)
-async def delete_file_view(file_id: str):
+async def delete_file_view(file_id: UUID):
     await delete_file(file_id)
     return Response(status_code=204)

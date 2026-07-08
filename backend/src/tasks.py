@@ -2,6 +2,7 @@ import asyncio
 import os
 from collections.abc import Awaitable
 from pathlib import Path
+from uuid import UUID
 
 from celery import Celery
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -26,7 +27,7 @@ engine = create_async_engine(DB_URL)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def _scan_file_for_threats(file_id: str) -> None:
+async def _scan_file_for_threats(file_id: UUID) -> None:
     async with async_session_maker() as session:
         file_item = await session.get(StoredFile, file_id)
         if not file_item:
@@ -53,7 +54,7 @@ async def _scan_file_for_threats(file_id: str) -> None:
     extract_file_metadata.delay(file_id)
 
 
-async def _extract_file_metadata(file_id: str) -> None:
+async def _extract_file_metadata(file_id: UUID) -> None:
     async with async_session_maker() as session:
         file_item = await session.get(StoredFile, file_id)
         if not file_item:
@@ -89,7 +90,7 @@ async def _extract_file_metadata(file_id: str) -> None:
     send_file_alert.delay(file_id)
 
 
-async def _send_file_alert(file_id: str) -> None:
+async def _send_file_alert(file_id: UUID) -> None:
     async with async_session_maker() as session:
         file_item = await session.get(StoredFile, file_id)
         if not file_item:
@@ -111,15 +112,15 @@ async def _send_file_alert(file_id: str) -> None:
 
 
 @celery_app.task
-def scan_file_for_threats(file_id: str) -> None:
+def scan_file_for_threats(file_id: UUID) -> None:
     run_in_worker_loop(_scan_file_for_threats(file_id))
 
 
 @celery_app.task
-def extract_file_metadata(file_id: str) -> None:
+def extract_file_metadata(file_id: UUID) -> None:
     run_in_worker_loop(_extract_file_metadata(file_id))
 
 
 @celery_app.task
-def send_file_alert(file_id: str) -> None:
+def send_file_alert(file_id: UUID) -> None:
     run_in_worker_loop(_send_file_alert(file_id))

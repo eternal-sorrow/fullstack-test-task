@@ -1,7 +1,7 @@
 import mimetypes
 import os
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -33,7 +33,7 @@ async def list_alerts() -> list[Alert]:
         return list(result.scalars().all())
 
 
-async def get_file(file_id: str) -> StoredFile:
+async def get_file(file_id: UUID) -> StoredFile:
     async with async_session_maker() as session:
         file_item = await session.get(StoredFile, file_id)
         if not file_item:
@@ -46,7 +46,7 @@ async def create_file(title: str, upload_file: UploadFile) -> StoredFile:
     if not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty")
 
-    file_id = str(uuid4())
+    file_id = uuid4()
     suffix = Path(upload_file.filename or "").suffix
     stored_name = f"{file_id}{suffix}"
     stored_path = STORAGE_DIR / stored_name
@@ -68,7 +68,7 @@ async def create_file(title: str, upload_file: UploadFile) -> StoredFile:
     return file_item
 
 
-async def update_file(file_id: str, title: str) -> StoredFile:
+async def update_file(file_id: UUID, title: str) -> StoredFile:
     async with async_session_maker() as session:
         file_item = await session.get(StoredFile, file_id)
         if not file_item:
@@ -79,7 +79,7 @@ async def update_file(file_id: str, title: str) -> StoredFile:
         return file_item
 
 
-async def delete_file(file_id: str) -> None:
+async def delete_file(file_id: UUID) -> None:
     async with async_session_maker() as session:
         file_item = await session.get(StoredFile, file_id)
         if not file_item:
@@ -91,7 +91,7 @@ async def delete_file(file_id: str) -> None:
         await session.commit()
 
 
-async def get_file_path(file_id: str) -> tuple[StoredFile, Path]:
+async def get_file_path(file_id: UUID) -> tuple[StoredFile, Path]:
     file_item = await get_file(file_id)
     stored_path = STORAGE_DIR / file_item.stored_name
     if not stored_path.exists():
@@ -99,7 +99,7 @@ async def get_file_path(file_id: str) -> tuple[StoredFile, Path]:
     return file_item, stored_path
 
 
-async def create_alert(file_id: str, level: str, message: str) -> Alert:
+async def create_alert(file_id: UUID, level: str, message: str) -> Alert:
     alert = Alert(file_id=file_id, level=level, message=message)
     async with async_session_maker() as session:
         session.add(alert)
