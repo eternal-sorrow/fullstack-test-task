@@ -1,6 +1,6 @@
 import logging
-from collections.abc import AsyncGenerator
-from typing import Annotated
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, File, Form, UploadFile
@@ -14,6 +14,9 @@ from src.db import SessionLocal
 from src.schemas import AlertItem, FileItem, FileUpdate
 from src.service import create_file, delete_file, get_file, get_file_path, list_alerts, list_files, update_file
 from src.tasks import scan_file_for_threats
+
+if TYPE_CHECKING:
+    from src.models import Alert, StoredFile
 
 logger = logging.getLogger(__name__)
 
@@ -31,21 +34,21 @@ app.add_middleware(
 )
 
 
-async def get_session() -> AsyncGenerator[AsyncSession]:
+async def get_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
-        yield session  # noqa: ASYNC119
+        yield session  # noqa: ASYNC119 - FastAPI dependency
 
 
 DbSession = Annotated[AsyncSession, Depends(get_session)]
 
 
 @app.get("/files", response_model=list[FileItem])
-async def list_files_view(db: DbSession):
+async def list_files_view(db: DbSession) -> 'list[StoredFile]':
     return await list_files(db)
 
 
 @app.get("/alerts", response_model=list[AlertItem])
-async def list_alerts_view(db: DbSession):
+async def list_alerts_view(db: DbSession) -> 'list[Alert]':
     return await list_alerts(db)
 
 
@@ -54,7 +57,7 @@ async def create_file_view(
     title: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     db: DbSession,
-):
+) -> 'StoredFile':
     file_item = await create_file(db, title=title, upload_file=file)
     try:
         scan_file_for_threats.delay(file_item.id)
@@ -76,12 +79,12 @@ async def update_file_view(
     file_id: UUID,
     payload: FileUpdate,
     db: DbSession,
-):
+) -> 'StoredFile':
     return await update_file(db, file_id=file_id, title=payload.title)
 
 
 @app.get("/files/{file_id}/download")
-async def download_file(file_id: UUID, db: DbSession):
+async def download_file(file_id: UUID, db: DbSession) -> FileResponse:
     file_item, stored_path = await get_file_path(db, file_id)
     return FileResponse(
         path=stored_path,
@@ -91,6 +94,6 @@ async def download_file(file_id: UUID, db: DbSession):
 
 
 @app.delete("/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_file_view(file_id: UUID, db: DbSession):
+async def delete_file_view(file_id: UUID, db: DbSession) -> Response:
     await delete_file(db, file_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
