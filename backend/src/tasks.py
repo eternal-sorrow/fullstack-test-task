@@ -1,17 +1,20 @@
 import asyncio
 import os
+from collections.abc import Awaitable
 from pathlib import Path
+
 from celery import Celery
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from src.models import Alert, StoredFile
-from src.service import STORAGE_DIR, DB_URL
+from src.service import DB_URL, STORAGE_DIR
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://backend-redis:6379/0")
 _worker_loop: asyncio.AbstractEventLoop | None = None
 
 
-def run_in_worker_loop(coroutine):
-    global _worker_loop
+def run_in_worker_loop[T](coroutine: Awaitable[T]):
+    global _worker_loop  # noqa: PLW0603
     if _worker_loop is None or _worker_loop.is_closed():
         _worker_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_worker_loop)
