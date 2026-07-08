@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from kombu.exceptions import OperationalError
@@ -12,7 +12,7 @@ from starlette import status
 
 from src.db import SessionLocal
 from src.schemas import AlertItem, FileItem, FileUpdate
-from src.service import STORAGE_DIR, create_file, delete_file, get_file, list_alerts, list_files, update_file
+from src.service import create_file, delete_file, get_file, get_file_path, list_alerts, list_files, update_file
 from src.tasks import scan_file_for_threats
 
 logger = logging.getLogger(__name__)
@@ -82,10 +82,7 @@ async def update_file_view(
 
 @app.get("/files/{file_id}/download")
 async def download_file(file_id: UUID, db: DbSession):
-    file_item = await get_file(db, file_id)
-    stored_path = STORAGE_DIR / file_item.stored_name
-    if not stored_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
+    file_item, stored_path = await get_file_path(db, file_id)
     return FileResponse(
         path=stored_path,
         media_type=file_item.mime_type,
