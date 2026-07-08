@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from starlette import status
 
 from src.schemas import AlertItem, FileItem, FileUpdate
@@ -71,3 +71,4 @@ async def download_file(file_id: str):
 @app.delete("/files/{file_id}", status_code=204)
 async def delete_file_view(file_id: str):
     await delete_file(file_id)
+    return Response(status_code=204)
