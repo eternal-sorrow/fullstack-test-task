@@ -7,8 +7,9 @@ from uuid import UUID
 from celery import Celery
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from src.db import DB_URL
 from src.models import Alert, StoredFile
-from src.service import DB_URL, STORAGE_DIR
+from src.service import STORAGE_DIR
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://backend-redis:6379/0")
 _worker_loop: asyncio.AbstractEventLoop | None = None
