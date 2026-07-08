@@ -49,7 +49,7 @@ async def list_alerts_view(db: DbSession):
     return await list_alerts(db)
 
 
-@app.post("/files", response_model=FileItem, status_code=201)
+@app.post("/files", response_model=FileItem, status_code=status.HTTP_201_CREATED)
 async def create_file_view(
     title: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
@@ -93,7 +93,7 @@ async def download_file(file_id: UUID, db: DbSession):
     )
 
 
-@app.delete("/files/{file_id}", status_code=204)
+@app.delete("/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_file_view(file_id: UUID, db: DbSession):
     await delete_file(db, file_id)
-    return Response(status_code=204)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
