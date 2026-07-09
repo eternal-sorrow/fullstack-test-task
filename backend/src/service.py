@@ -1,4 +1,6 @@
 import mimetypes
+from asyncio import to_thread
+from io import Reader, Writer
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -8,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import Alert, StoredFile
 
+CHUNK_SIZE = 1024 * 1024
 BASE_DIR = Path(__file__).resolve().parent.parent
 STORAGE_DIR = BASE_DIR / "storage" / "files"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,16 +33,30 @@ async def get_file(session: AsyncSession, file_id: UUID) -> StoredFile:
     return file_item
 
 
-async def create_file(session: AsyncSession, title: str, upload_file: UploadFile) -> StoredFile:
-    content = await upload_file.read()
-    if not content:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty")
+def copy_upload(src: Reader[bytes], dst: Writer[bytes]) -> int:
+    size = 0
+    while chunk := src.read(CHUNK_SIZE):
+        size += dst.write(chunk)
+    return size
 
+
+async def create_file(session: AsyncSession, title: str, upload_file: UploadFile) -> StoredFile:
     file_id = uuid4()
     suffix = Path(upload_file.filename or "").suffix
     stored_name = f"{file_id}{suffix}"
     stored_path = STORAGE_DIR / stored_name
-    stored_path.write_bytes(content)
+
+    size = 0
+    stored_file = await to_thread(stored_path.open, 'wb')
+    try:
+        size = await to_thread(copy_upload, upload_file.file, stored_file)
+    except Exception:
+        await to_thread(stored_path.unlink)
+        raise
+    finally:
+        await to_thread(stored_file.close)
+    if size == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty")
 
     file_item = StoredFile(
         id=file_id,
@@ -47,7 +64,7 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
         original_name=upload_file.filename or stored_name,
         stored_name=stored_name,
         mime_type=upload_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
-        size=len(content),
+        size=size,
         processing_status="uploaded",
     )
     session.add(file_item)
