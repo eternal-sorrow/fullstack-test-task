@@ -93,8 +93,8 @@ async def delete_file(session: AsyncSession, file_id: UUID) -> None:
     if not file_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     stored_path = STORAGE_DIR / file_item.stored_name
-    if stored_path.exists():
-        stored_path.unlink()
+    if await to_thread(stored_path.exists):
+        await to_thread(stored_path.unlink)
     await session.delete(file_item)
     await session.commit()
 
@@ -102,7 +102,7 @@ async def delete_file(session: AsyncSession, file_id: UUID) -> None:
 async def get_file_path(session: AsyncSession, file_id: UUID) -> tuple[StoredFile, Path]:
     file_item = await get_file(session, file_id)
     stored_path = STORAGE_DIR / file_item.stored_name
-    if not stored_path.exists():
+    if not await to_thread(stored_path.exists):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
     return file_item, stored_path
 
