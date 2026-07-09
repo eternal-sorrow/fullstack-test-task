@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
@@ -59,12 +59,12 @@ DbSession = Annotated[AsyncSession, Depends(get_session)]
 
 
 @app.get("/files", response_model=list[FileItem])
-async def list_files_view(db: DbSession) -> 'list[StoredFile]':
+async def list_files_view(db: DbSession) -> 'Sequence[StoredFile]':
     return await list_files(db)
 
 
 @app.get("/alerts", response_model=list[AlertItem])
-async def list_alerts_view(db: DbSession) -> 'list[Alert]':
+async def list_alerts_view(db: DbSession) -> 'Sequence[Alert]':
     return await list_alerts(db)
 
 

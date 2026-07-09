@@ -1,5 +1,6 @@
 import mimetypes
 from asyncio import to_thread
+from collections.abc import Sequence
 from io import Reader, Writer
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -15,14 +16,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 STORAGE_DIR = BASE_DIR / "storage" / "files"
 
 
-async def list_files(session: AsyncSession) -> list[StoredFile]:
+async def list_files(session: AsyncSession) -> Sequence[StoredFile]:
     result = await session.execute(select(StoredFile).order_by(StoredFile.created_at.desc()))
-    return list(result.scalars().all())
+    return result.scalars().all()
 
 
-async def list_alerts(session: AsyncSession) -> list[Alert]:
+async def list_alerts(session: AsyncSession) -> Sequence[Alert]:
     result = await session.execute(select(Alert).order_by(Alert.created_at.desc()))
-    return list(result.scalars().all())
+    return result.scalars().all()
 
 
 async def get_file(session: AsyncSession, file_id: UUID) -> StoredFile:
