@@ -56,6 +56,7 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
     finally:
         await to_thread(stored_file.close)
     if size == 0:
+        await to_thread(stored_path.unlink)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty")
 
     file_item = StoredFile(
@@ -68,7 +69,11 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
         processing_status="uploaded",
     )
     session.add(file_item)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception:
+        await to_thread(stored_path.unlink)
+        raise
     await session.refresh(file_item)
     return file_item
 
