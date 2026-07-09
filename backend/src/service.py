@@ -79,9 +79,7 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
 
 
 async def update_file(session: AsyncSession, file_id: UUID, title: str) -> StoredFile:
-    file_item = await session.get(StoredFile, file_id)
-    if not file_item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    file_item = await get_file(session, file_id)
     file_item.title = title
     await session.commit()
     await session.refresh(file_item)
@@ -89,9 +87,7 @@ async def update_file(session: AsyncSession, file_id: UUID, title: str) -> Store
 
 
 async def delete_file(session: AsyncSession, file_id: UUID) -> None:
-    file_item = await session.get(StoredFile, file_id)
-    if not file_item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    file_item = await get_file(session, file_id)
     stored_path = STORAGE_DIR / file_item.stored_name
     if await to_thread(stored_path.exists):
         await to_thread(stored_path.unlink)
