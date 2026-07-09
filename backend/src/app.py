@@ -1,5 +1,6 @@
 import logging
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
@@ -12,7 +13,16 @@ from starlette import status
 
 from src.db import SessionLocal
 from src.schemas import AlertItem, FileItem, FileUpdate
-from src.service import create_file, delete_file, get_file, get_file_path, list_alerts, list_files, update_file
+from src.service import (
+    STORAGE_DIR,
+    create_file,
+    delete_file,
+    get_file,
+    get_file_path,
+    list_alerts,
+    list_files,
+    update_file,
+)
 from src.tasks import scan_file_for_threats
 
 if TYPE_CHECKING:
@@ -21,7 +31,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

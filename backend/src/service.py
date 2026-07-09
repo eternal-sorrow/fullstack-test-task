@@ -13,7 +13,6 @@ from src.models import Alert, StoredFile
 CHUNK_SIZE = 1024 * 1024
 BASE_DIR = Path(__file__).resolve().parent.parent
 STORAGE_DIR = BASE_DIR / "storage" / "files"
-STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def list_files(session: AsyncSession) -> list[StoredFile]:
