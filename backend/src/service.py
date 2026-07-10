@@ -68,9 +68,9 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
         size=size,
         processing_status="uploaded",
     )
-    session.add(file_item)
     try:
-        await session.commit()
+        async with session.begin():
+            session.add(file_item)
     except Exception:
         await to_thread(stored_path.unlink)
         raise
@@ -79,20 +79,19 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
 
 
 async def update_file(session: AsyncSession, file_id: UUID, title: str) -> StoredFile:
-    file_item = await get_file(session, file_id)
-    file_item.title = title
-    await session.commit()
+    async with session.begin():
+        file_item = await get_file(session, file_id)
+        file_item.title = title
     await session.refresh(file_item)
     return file_item
 
 
 async def delete_file(session: AsyncSession, file_id: UUID) -> None:
-    file_item = await get_file(session, file_id)
-    stored_path = STORAGE_DIR / file_item.stored_name
-    if await to_thread(stored_path.exists):
-        await to_thread(stored_path.unlink)
-    await session.delete(file_item)
-    await session.commit()
+    async with session.begin():
+        file_item = await get_file(session, file_id)
+        stored_path = STORAGE_DIR / file_item.stored_name
+        await session.delete(file_item)
+    await to_thread(stored_path.unlink, missing_ok=True)
 
 
 async def get_file_path(session: AsyncSession, file_id: UUID) -> tuple[StoredFile, Path]:
@@ -105,7 +104,7 @@ async def get_file_path(session: AsyncSession, file_id: UUID) -> tuple[StoredFil
 
 async def create_alert(session: AsyncSession, file_id: UUID, level: str, message: str) -> Alert:
     alert = Alert(file_id=file_id, level=level, message=message)
-    session.add(alert)
-    await session.commit()
+    async with session.begin():
+        session.add(alert)
     await session.refresh(alert)
     return alert
