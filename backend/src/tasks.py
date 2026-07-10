@@ -8,6 +8,7 @@ from celery import Celery
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.db import DB_URL
+from src.enums import AlertLevel, ProcessingStatus, ScanStatus
 from src.models import Alert, StoredFile
 from src.service import STORAGE_DIR
 
@@ -34,7 +35,7 @@ async def _scan_file_for_threats(file_id: UUID) -> None:
         if not file_item:
             return
 
-        file_item.processing_status = "processing"
+        file_item.processing_status = ProcessingStatus.PROCESSING
         reasons: list[str] = []
         extension = Path(file_item.original_name).suffix.lower()
 
@@ -47,7 +48,7 @@ async def _scan_file_for_threats(file_id: UUID) -> None:
         if extension == ".pdf" and file_item.mime_type not in {"application/pdf", "application/octet-stream"}:
             reasons.append("pdf extension does not match mime type")
 
-        file_item.scan_status = "suspicious" if reasons else "clean"
+        file_item.scan_status = ScanStatus.SUSPICIOUS if reasons else ScanStatus.CLEAN
         file_item.scan_details = ", ".join(reasons) if reasons else "no threats found"
         file_item.requires_attention = bool(reasons)
         await session.commit()
@@ -63,8 +64,8 @@ async def _extract_file_metadata(file_id: UUID) -> None:
 
         stored_path = STORAGE_DIR / file_item.stored_name
         if not stored_path.exists():
-            file_item.processing_status = "failed"
-            file_item.scan_status = file_item.scan_status or "failed"
+            file_item.processing_status = ProcessingStatus.FAILED
+            file_item.scan_status = file_item.scan_status or ScanStatus.FAILED
             file_item.scan_details = "stored file not found during metadata extraction"
             await session.commit()
             send_file_alert.delay(file_id)
@@ -85,7 +86,7 @@ async def _extract_file_metadata(file_id: UUID) -> None:
             metadata["approx_page_count"] = max(content.count(b"/Type /Page"), 1)
 
         file_item.metadata_json = metadata
-        file_item.processing_status = "processed"
+        file_item.processing_status = ProcessingStatus.PROCESSED
         await session.commit()
 
     send_file_alert.delay(file_id)
@@ -97,16 +98,16 @@ async def _send_file_alert(file_id: UUID) -> None:
         if not file_item:
             return
 
-        if file_item.processing_status == "failed":
-            alert = Alert(file_id=file_id, level="critical", message="File processing failed")
+        if file_item.processing_status == ProcessingStatus.FAILED:
+            alert = Alert(file_id=file_id, level=AlertLevel.CRITICAL, message="File processing failed")
         elif file_item.requires_attention:
             alert = Alert(
                 file_id=file_id,
-                level="warning",
+                level=AlertLevel.WARNING,
                 message=f"File requires attention: {file_item.scan_details}",
             )
         else:
-            alert = Alert(file_id=file_id, level="info", message="File processed successfully")
+            alert = Alert(file_id=file_id, level=AlertLevel.INFO, message="File processed successfully")
 
         session.add(alert)
         await session.commit()

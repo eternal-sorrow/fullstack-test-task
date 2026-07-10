@@ -8,7 +8,9 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import col
 
+from src.enums import ProcessingStatus
 from src.models import Alert, StoredFile
 
 CHUNK_SIZE = 1024 * 1024
@@ -17,12 +19,12 @@ STORAGE_DIR = BASE_DIR / "storage" / "files"
 
 
 async def list_files(session: AsyncSession) -> Sequence[StoredFile]:
-    result = await session.execute(select(StoredFile).order_by(StoredFile.created_at.desc()))
+    result = await session.execute(select(StoredFile).order_by(col(StoredFile.created_at).desc()))
     return result.scalars().all()
 
 
 async def list_alerts(session: AsyncSession) -> Sequence[Alert]:
-    result = await session.execute(select(Alert).order_by(Alert.created_at.desc()))
+    result = await session.execute(select(Alert).order_by(col(Alert.created_at).desc()))
     return result.scalars().all()
 
 
@@ -71,7 +73,7 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
         stored_name=stored_name,
         mime_type=upload_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream",
         size=size,
-        processing_status="uploaded",
+        processing_status=ProcessingStatus.UPLOADED,
     )
     try:
         async with session.begin():

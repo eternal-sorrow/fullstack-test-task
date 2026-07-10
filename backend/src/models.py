@@ -1,51 +1,73 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import JSON, Column, DateTime, func
+from sqlmodel import Field, SQLModel
+
+from src.enums import AlertLevel, ProcessingStatus, ScanStatus
 
 
-class Base(DeclarativeBase):
-    pass
+class FileBase(SQLModel):
+    title: str = Field(max_length=255)
+    original_name: str = Field(max_length=255)
+    mime_type: str = Field(max_length=255)
+    size: int
 
+    processing_status: ProcessingStatus = ProcessingStatus.UPLOADED
+    scan_status: ScanStatus | None = None
+    scan_details: str | None = Field(default=None, max_length=500)
 
-class StoredFile(Base):
-    __tablename__ = "files"
-
-    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    stored_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
-    size: Mapped[int] = mapped_column(Integer, nullable=False)
-    processing_status: Mapped[str] = mapped_column(String(50), nullable=False, default="uploaded")
-    scan_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    scan_details: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    requires_attention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
+    metadata_json: dict[str, Any] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
     )
 
+    requires_attention: bool = False
 
-class Alert(Base):
-    __tablename__ = "alerts"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    file_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("files.id"), nullable=False)
-    level: Mapped[str] = mapped_column(String(50), nullable=False)
-    message: Mapped[str] = mapped_column(String(500), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+class StoredFile(FileBase, table=True):
+    __tablename__: ClassVar[str] = "files"  # pyright: ignore[reportIncompatibleVariableOverride]
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    stored_name: str = Field(max_length=255, unique=True)
+
+    created_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+        ),
+    )
+
+    updated_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+            onupdate=func.now(),
+        ),
+    )
+
+
+class AlertBase(SQLModel):
+    level: AlertLevel
+    message: str = Field(max_length=500)
+
+
+class Alert(AlertBase, table=True):
+    __tablename__: ClassVar[str] = "alerts"  # pyright: ignore[reportIncompatibleVariableOverride]
+
+    id: int | None = Field(default=None, primary_key=True)
+    file_id: UUID = Field(foreign_key="files.id")
+
+    created_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            nullable=False,
+            server_default=func.now(),
+        ),
     )
