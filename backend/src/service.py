@@ -40,8 +40,7 @@ def copy_upload(src: Reader[bytes], dst: Writer[bytes]) -> int:
     return size
 
 
-async def create_file(session: AsyncSession, title: str, upload_file: UploadFile) -> StoredFile:
-    file_id = uuid4()
+async def save_upload(upload_file: UploadFile, file_id: UUID) -> tuple[Path, int]:
     suffix = Path(upload_file.filename or "").suffix
     stored_name = f"{file_id}{suffix}"
     stored_path = STORAGE_DIR / stored_name
@@ -58,7 +57,13 @@ async def create_file(session: AsyncSession, title: str, upload_file: UploadFile
     if size == 0:
         await to_thread(stored_path.unlink)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty")
+    return stored_path, size
 
+
+async def create_file(session: AsyncSession, title: str, upload_file: UploadFile) -> StoredFile:
+    file_id = uuid4()
+    stored_path, size = await save_upload(upload_file, file_id)
+    stored_name = stored_path.name
     file_item = StoredFile(
         id=file_id,
         title=title,
