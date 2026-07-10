@@ -107,11 +107,3 @@ async def get_file_path(session: AsyncSession, file_id: UUID) -> tuple[StoredFil
     if not await to_thread(stored_path.exists):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored file not found")
     return file_item, stored_path
-
-
-async def create_alert(session: AsyncSession, file_id: UUID, level: str, message: str) -> Alert:
-    alert = Alert(file_id=file_id, level=level, message=message)
-    async with session.begin():
-        session.add(alert)
-    await session.refresh(alert)
-    return alert
