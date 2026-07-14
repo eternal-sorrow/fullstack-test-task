@@ -16,3 +16,8 @@ dependencies = [
     "sqlmodel>=0.0.39",
     "uvicorn>=0.42.0",
 ]
+
+[dependency-groups]
+dev = [
+    "celery-types>=0.26.0",
+]
