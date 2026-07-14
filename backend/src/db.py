@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 DB_URL = (
-    f"postgresql+asyncpg://{os.environ['POSTGRES_USER']}:"
+    f"postgresql+psycopg://{os.environ['POSTGRES_USER']}:"
     f"{os.environ['POSTGRES_PASSWORD']}@"
     f"{os.environ['POSTGRES_HOST']}:"
     f"{os.environ['PGPORT']}/"
