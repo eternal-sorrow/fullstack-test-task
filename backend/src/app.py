@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
+from celery import chain
 from fastapi import Depends, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -23,7 +24,7 @@ from src.service import (
     list_files,
     update_file,
 )
-from src.tasks import scan_file_for_threats
+from src.tasks import extract_file_metadata, scan_file_for_threats, send_file_alert
 
 if TYPE_CHECKING:
     from src.models import Alert, StoredFile
@@ -76,7 +77,11 @@ async def create_file_view(
 ) -> 'StoredFile':
     file_item = await create_file(db, title=title, upload_file=file)
     try:
-        scan_file_for_threats.delay(file_item.id)
+        chain(
+            scan_file_for_threats.s(file_item.id),
+            extract_file_metadata.s(),
+            send_file_alert.s(),
+        ).apply_async()
     except OperationalError:
         logger.exception(
             "Failed to enqueue virus scan for file %s",

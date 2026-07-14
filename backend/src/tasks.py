@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import UUID
 
 from celery import Celery
+from celery.exceptions import Ignore
 
 from src.db import SyncSessionLocal
 from src.enums import AlertLevel, ProcessingStatus, ScanStatus
@@ -14,11 +15,11 @@ celery_app = Celery("file_tasks", broker=REDIS_URL, backend=REDIS_URL)
 
 
 @celery_app.task
-def scan_file_for_threats(file_id: UUID) -> None:
+def scan_file_for_threats(file_id: UUID) -> UUID:
     with SyncSessionLocal.begin() as session:
         file_item = session.get(StoredFile, file_id)
         if not file_item:
-            return
+            raise Ignore
 
         file_item.processing_status = ProcessingStatus.PROCESSING
         reasons: list[str] = []
@@ -38,23 +39,22 @@ def scan_file_for_threats(file_id: UUID) -> None:
         file_item.requires_attention = bool(reasons)
 
     extract_file_metadata.delay(file_id)
+    return file_id
 
 
 @celery_app.task
-def extract_file_metadata(file_id: UUID) -> None:
-    with SyncSessionLocal() as session:
+def extract_file_metadata(file_id: UUID) -> UUID:
+    with SyncSessionLocal.begin() as session:
         file_item = session.get(StoredFile, file_id)
         if not file_item:
-            return
+            raise Ignore
 
         stored_path = STORAGE_DIR / file_item.stored_name
         if not stored_path.exists():
             file_item.processing_status = ProcessingStatus.FAILED
             file_item.scan_status = file_item.scan_status or ScanStatus.FAILED
             file_item.scan_details = "stored file not found during metadata extraction"
-            session.commit()
-            send_file_alert.delay(file_id)
-            return
+            return file_id
 
         metadata = {
             "extension": Path(file_item.original_name).suffix.lower(),
@@ -72,9 +72,7 @@ def extract_file_metadata(file_id: UUID) -> None:
 
         file_item.metadata_json = metadata
         file_item.processing_status = ProcessingStatus.PROCESSED
-        session.commit()
-
-    send_file_alert.delay(file_id)
+        return file_id
 
 
 @celery_app.task
