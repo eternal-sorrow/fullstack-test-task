@@ -1,37 +1,22 @@
-import asyncio
 import os
-from collections.abc import Awaitable
 from pathlib import Path
 from uuid import UUID
 
 from celery import Celery
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from src.db import DB_URL
+from src.db import SyncSessionLocal
 from src.enums import AlertLevel, ProcessingStatus, ScanStatus
 from src.models import Alert, StoredFile
 from src.service import STORAGE_DIR
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://backend-redis:6379/0")
-_worker_loop: asyncio.AbstractEventLoop | None = None
-
-
-def run_in_worker_loop[T](coroutine: Awaitable[T]):
-    global _worker_loop  # noqa: PLW0603
-    if _worker_loop is None or _worker_loop.is_closed():
-        _worker_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(_worker_loop)
-    return _worker_loop.run_until_complete(coroutine)
-
-
 celery_app = Celery("file_tasks", broker=REDIS_URL, backend=REDIS_URL)
-engine = create_async_engine(DB_URL)
-async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def _scan_file_for_threats(file_id: UUID) -> None:
-    async with async_session_maker() as session:
-        file_item = await session.get(StoredFile, file_id)
+@celery_app.task
+def scan_file_for_threats(file_id: UUID) -> None:
+    with SyncSessionLocal.begin() as session:
+        file_item = session.get(StoredFile, file_id)
         if not file_item:
             return
 
@@ -51,14 +36,14 @@ async def _scan_file_for_threats(file_id: UUID) -> None:
         file_item.scan_status = ScanStatus.SUSPICIOUS if reasons else ScanStatus.CLEAN
         file_item.scan_details = ", ".join(reasons) if reasons else "no threats found"
         file_item.requires_attention = bool(reasons)
-        await session.commit()
 
     extract_file_metadata.delay(file_id)
 
 
-async def _extract_file_metadata(file_id: UUID) -> None:
-    async with async_session_maker() as session:
-        file_item = await session.get(StoredFile, file_id)
+@celery_app.task
+def extract_file_metadata(file_id: UUID) -> None:
+    with SyncSessionLocal() as session:
+        file_item = session.get(StoredFile, file_id)
         if not file_item:
             return
 
@@ -67,7 +52,7 @@ async def _extract_file_metadata(file_id: UUID) -> None:
             file_item.processing_status = ProcessingStatus.FAILED
             file_item.scan_status = file_item.scan_status or ScanStatus.FAILED
             file_item.scan_details = "stored file not found during metadata extraction"
-            await session.commit()
+            session.commit()
             send_file_alert.delay(file_id)
             return
 
@@ -87,14 +72,15 @@ async def _extract_file_metadata(file_id: UUID) -> None:
 
         file_item.metadata_json = metadata
         file_item.processing_status = ProcessingStatus.PROCESSED
-        await session.commit()
+        session.commit()
 
     send_file_alert.delay(file_id)
 
 
-async def _send_file_alert(file_id: UUID) -> None:
-    async with async_session_maker() as session:
-        file_item = await session.get(StoredFile, file_id)
+@celery_app.task
+def send_file_alert(file_id: UUID) -> None:
+    with SyncSessionLocal.begin() as session:
+        file_item = session.get(StoredFile, file_id)
         if not file_item:
             return
 
@@ -110,19 +96,3 @@ async def _send_file_alert(file_id: UUID) -> None:
             alert = Alert(file_id=file_id, level=AlertLevel.INFO, message="File processed successfully")
 
         session.add(alert)
-        await session.commit()
-
-
-@celery_app.task
-def scan_file_for_threats(file_id: UUID) -> None:
-    run_in_worker_loop(_scan_file_for_threats(file_id))
-
-
-@celery_app.task
-def extract_file_metadata(file_id: UUID) -> None:
-    run_in_worker_loop(_extract_file_metadata(file_id))
-
-
-@celery_app.task
-def send_file_alert(file_id: UUID) -> None:
-    run_in_worker_loop(_send_file_alert(file_id))
